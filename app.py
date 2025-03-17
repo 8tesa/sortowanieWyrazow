@@ -1,77 +1,89 @@
-from flask import Flask, request, render_template_string
+from flask import Flask, request, render_template
 import re
-import os
+import openai
 
 app = Flask(__name__)
 
+# API OpenAI (upewnij się, że masz poprawny klucz)
+openai.api_key = "TWOJ_KLUCZ_API"
+
 # Lista skrótów instytucji do odrzucenia
-skroty_instytucji = {"PGKIM", "GOPR", "WOSL", "PKP", "ZUS", "NFZ", "PZU"}
+SKROTY_INSTYTUCJI = {"PGKIM", "GOPR", "WOSL", "PKP", "ZUS", "NFZ", "PZU"}
 
-def sprawdz_wyraz(wyraz):
-    # Odrzucanie skrótów instytucji
-    if wyraz in skroty_instytucji:
+# Funkcja sprawdzająca, czy słowo zawiera cyfry
+def zawiera_cyfry(slowo):
+    return any(char.isdigit() for char in slowo)
+
+# Funkcja sprawdzająca, czy słowo jest podwójne
+def podwojne_slowo(slowo):
+    return " " in slowo
+
+# Funkcja sprawdzająca, czy słowo jest sklejone (np. "domszafa")
+def sklejone_slowo(slowo):
+    return not re.match(r'^[a-zA-ZąćęłńóśźżĄĆĘŁŃÓŚŹŻ]+$', slowo)
+
+# Funkcja sprawdzająca poprawność słowa w języku polskim za pomocą OpenAI
+def sprawdz_w_openai(slowo):
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4-turbo",
+            messages=[
+                {"role": "system", "content": "Czy to poprawne polskie słowo? Odpowiedz tylko 'TAK' lub 'NIE'!"},
+                {"role": "user", "content": slowo}
+            ]
+        )
+        odpowiedz = response["choices"][0]["message"]["content"].strip()
+        return odpowiedz == "TAK"
+    except:
         return False
-    # Odrzucanie słów zawierających cyfry
-    if any(char.isdigit() for char in wyraz):
-        return False
-    # Odrzucanie podwójnych i sklejonych wyrazów (jeśli nie istnieją)
-    if " " in wyraz or re.search(r"[A-Z]{2,}", wyraz):
-        return False
-    return True
 
-@app.route("/", methods=["GET", "POST"])
-def upload_file():
-    if request.method == "POST":
-        if "file" not in request.files:
-            return "Brak pliku"
-        file = request.files["file"]
-        if file.filename == "":
-            return "Nie wybrano pliku"
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-        poprawne = []
-        odrzucone = []
+@app.route('/upload', methods=['POST'])
+def upload():
+    if 'file' not in request.files:
+        return "Nie przesłano pliku."
+    
+    file = request.files['file']
+    if file.filename == '':
+        return "Nie wybrano pliku."
+    
+    poprawne_slowa = []
+    odrzucone_slowa = []
+    
+    for line in file:
+        slowo = line.decode('utf-8').strip()
+        if (slowo in SKROTY_INSTYTUCJI or 
+            zawiera_cyfry(slowo) or 
+            podwojne_slowo(slowo) or 
+            sklejone_slowo(slowo)):
+            odrzucone_slowa.append(slowo)
+        elif sprawdz_w_openai(slowo):
+            poprawne_slowa.append(slowo)
+        else:
+            odrzucone_slowa.append(slowo)
+    
+    # Zapis wyników do plików
+    with open('poprawne.txt', 'w', encoding='utf-8') as f:
+        f.write("\n".join(poprawne_slowa))
+    
+    with open('odrzucone.txt', 'w', encoding='utf-8') as f:
+        f.write("\n".join(odrzucone_slowa))
+    
+    return "Przetwarzanie zakończone! <a href='/download/poprawne'>Pobierz poprawne słowa</a> | <a href='/download/odrzucone'>Pobierz odrzucone słowa</a>"
 
-        for line in file.read().decode("utf-8").splitlines():
-            wyraz = line.strip()
-            if sprawdz_wyraz(wyraz):
-                poprawne.append(wyraz)
-            else:
-                odrzucone.append(wyraz)
+@app.route('/download/<file>')
+def download(file):
+    if file == "poprawne":
+        return open('poprawne.txt', 'r', encoding='utf-8').read()
+    elif file == "odrzucone":
+        return open('odrzucone.txt', 'r', encoding='utf-8').read()
+    return "Nie znaleziono pliku."
 
-        # Zapisywanie wyników
-        poprawne_file = "poprawne.txt"
-        odrzucone_file = "odrzucone.txt"
-
-        with open(poprawne_file, "w", encoding="utf-8") as f:
-            f.write("\n".join(poprawne))
-        with open(odrzucone_file, "w", encoding="utf-8") as f:
-            f.write("\n".join(odrzucone))
-
-        return render_template_string('''
-            <!doctype html>
-            <title>Wynik</title>
-            <h1>Przetwarzanie zakończone!</h1>
-            <p><a href="/download/poprawne">Pobierz poprawne słowa</a></p>
-            <p><a href="/download/odrzucone">Pobierz odrzucone słowa</a></p>
-        ''')
-
-    return render_template_string('''
-        <!doctype html>
-        <title>Prześlij plik</title>
-        <h1>Prześlij plik .txt do sprawdzenia</h1>
-        <form method=post enctype=multipart/form-data>
-            <input type=file name=file>
-            <input type=submit value=Prześlij>
-        </form>
-    ''')
-
-@app.route("/download/<filename>")
-def download_file(filename):
-    if filename == "poprawne":
-        return open("poprawne.txt", "r", encoding="utf-8").read()
-    elif filename == "odrzucone":
-        return open("odrzucone.txt", "r", encoding="utf-8").read()
-    return "Plik nie istnieje!"
+if __name__ == '__main__':
+    app.run(debug=True)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
