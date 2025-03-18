@@ -3,31 +3,8 @@ import openai
 
 app = Flask(__name__)
 
-# API OpenAI (upewnij się, że masz poprawny klucz)
-openai.api_key = "TWÓJ_KLUCZ_API"
-
-# Funkcja sprawdzająca poprawność słowa w języku polskim za pomocą OpenAI
-def sprawdz_w_openai(slowo):
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4-turbo",
-            messages=[
-                {"role": "system", "content": "Czy to poprawne polskie słowo? Odpowiedz tylko 'TAK' lub 'NIE'!"},
-                {"role": "user", "content": slowo}
-            ]
-        )
-        odpowiedz = response["choices"][0]["message"]["content"].strip()
-        
-        # Dodaj logowanie:
-        with open("log_responses.txt", "a", encoding="utf-8") as log_file:
-            log_file.write(f"{slowo} -> {odpowiedz}\n")
-        
-        return odpowiedz == "TAK"
-    except Exception as e:
-        # Również zapisujemy wyjątek, jeśli coś pójdzie nie tak
-        with open("log_responses.txt", "a", encoding="utf-8") as log_file:
-            log_file.write(f"{slowo} -> ERROR: {str(e)}\n")
-        return False
+# Upewnij się, że Twój klucz API OpenAI jest ustawiony jako zmienna środowiskowa.
+openai.api_key = "TWÓJ_KLUCZ_API"  # Zastąp właściwym kluczem lub skorzystaj z zmiennej środowiskowej.
 
 @app.route('/')
 def index():
@@ -69,8 +46,26 @@ def download(file):
         return open('odrzucone.txt', 'r', encoding='utf-8').read()
     return "Nie znaleziono pliku."
 
+def sprawdz_w_openai(slowo):
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",  # lub gpt-4, jeśli masz dostęp
+            messages=[
+                {"role": "system", "content": "Czy to poprawne polskie słowo? Odpowiedz tylko 'TAK' lub 'NIE'!"},
+                {"role": "user", "content": slowo}
+            ]
+        )
+        # Drukowanie odpowiedzi do debugowania
+        print("Odpowiedź z OpenAI:", response)
+        odpowiedz = response["choices"][0]["message"]["content"].strip()
+        return odpowiedz == "TAK"
+    except Exception as e:
+        print("Błąd podczas komunikacji z OpenAI:", e)
+        return False
+
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
 
