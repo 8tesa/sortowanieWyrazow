@@ -18,8 +18,16 @@ def sprawdz_w_openai(slowo):
                 {"role": "user", "content": slowo}
             ]
         )
-        odpowiedz = response.choices[0].message.content.strip()
-        return odpowiedz == "TAK"
+        
+        # Sprawdzamy pełną odpowiedź OpenAI
+        print("Odpowiedź z OpenAI:", response)
+        
+        if response.choices:
+            odpowiedz = response.choices[0].message.content.strip()
+            return odpowiedz == "TAK"
+        else:
+            print("Brak odpowiedzi w 'choices'")
+            return False
     except Exception as e:
         print(f"Błąd komunikacji z OpenAI: {e}")
         return False
@@ -47,12 +55,15 @@ def upload():
         else:
             odrzucone_slowa.append(slowo)
     
-    # Zapis wyników do plików
+    # Zapisywanie wyników do plików i logowanie
     with open('poprawne.txt', 'w', encoding='utf-8') as f:
         f.write("\n".join(poprawne_slowa))
     
     with open('odrzucone.txt', 'w', encoding='utf-8') as f:
         f.write("\n".join(odrzucone_slowa))
+    
+    print(f"Poprawne słowa: {len(poprawne_slowa)}")
+    print(f"Odrzucone słowa: {len(odrzucone_slowa)}")
     
     return "Przetwarzanie zakończone! <a href='/download/poprawne'>Pobierz poprawne słowa</a> | <a href='/download/odrzucone'>Pobierz odrzucone słowa</a>"
 
@@ -66,6 +77,8 @@ def download(file):
 
 if __name__ == '__main__':
     app.run(debug=True)
+
+
 
 
 
