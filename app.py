@@ -1,10 +1,28 @@
 from flask import Flask, request, render_template
 import openai
+import os
 
 app = Flask(__name__)
 
-# Upewnij się, że Twój klucz API OpenAI jest ustawiony jako zmienna środowiskowa.
-openai.api_key = "TWÓJ_KLUCZ_API"  # Zastąp właściwym kluczem lub skorzystaj z zmiennej środowiskowej.
+# Pobieranie klucza API z zmiennych środowiskowych
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
+# Funkcja sprawdzająca poprawność słowa w języku polskim za pomocą OpenAI
+def sprawdz_w_openai(slowo):
+    try:
+        client = openai.OpenAI()
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "Czy to poprawne polskie słowo? Odpowiedz tylko 'TAK' lub 'NIE'!"},
+                {"role": "user", "content": slowo}
+            ]
+        )
+        odpowiedz = response.choices[0].message.content.strip()
+        return odpowiedz == "TAK"
+    except Exception as e:
+        print(f"Błąd komunikacji z OpenAI: {e}")
+        return False
 
 @app.route('/')
 def index():
@@ -46,25 +64,9 @@ def download(file):
         return open('odrzucone.txt', 'r', encoding='utf-8').read()
     return "Nie znaleziono pliku."
 
-def sprawdz_w_openai(slowo):
-    try:
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",  # lub gpt-4, jeśli masz dostęp
-            messages=[
-                {"role": "system", "content": "Czy to poprawne polskie słowo? Odpowiedz tylko 'TAK' lub 'NIE'!"},
-                {"role": "user", "content": slowo}
-            ]
-        )
-        # Drukowanie odpowiedzi do debugowania
-        print("Odpowiedź z OpenAI:", response)
-        odpowiedz = response["choices"][0]["message"]["content"].strip()
-        return odpowiedz == "TAK"
-    except Exception as e:
-        print("Błąd podczas komunikacji z OpenAI:", e)
-        return False
-
 if __name__ == '__main__':
     app.run(debug=True)
+
 
 
 
